@@ -1005,7 +1005,8 @@
     // ── Fetch ──────────────────────────────────────────────────────────────────
     async function api(ip, path, params = {}) {
       const qs = new URLSearchParams(params).toString();
-      const url = `http://${ip}:${PORT}${path}${qs ? '?' + qs : ''}`;
+      const addr = ip.includes(':') ? ip : `${ip}:${PORT}`;
+      const url = `http://${addr}${path}${qs ? '?' + qs : ''}`;
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 4000);
       try {
@@ -1036,11 +1037,14 @@
       setStatus('scanning', 'Scanning LAN…');
       toast('🔍 Scanning your network for agents…');
       let found = 0;
-      // Always probe loopback/localhost first for immediate detection on local machine
-      try {
-        const local = await probe('127.0.0.1');
-        if (local) { register(local); found++; }
-      } catch (e) { }
+      // Probe loopback targets (standard agent on 7842 + local mock devices on 7851-7854)
+      const localTargets = ['127.0.0.1', '127.0.0.1:7851', '127.0.0.1:7852', '127.0.0.1:7853', '127.0.0.1:7854'];
+      for (const target of localTargets) {
+        try {
+          const local = await probe(target);
+          if (local && !agents[local.ip]) { register(local); found++; }
+        } catch (e) { }
+      }
 
       const subnets = ['192.168.1', '192.168.0', '10.0.0', '10.0.1', '172.16.0'];
       for (const s of subnets) {
@@ -1063,7 +1067,7 @@
       if (!ip) return;
       const parts = ip.split('.');
       // Subnet entry (3 octets or ends with .0)
-      if (parts.length === 3 || ip.endsWith('.0')) {
+      if ((parts.length === 3 || ip.endsWith('.0')) && !ip.includes(':')) {
         const base = parts.length === 3 ? ip : parts.slice(0, 3).join('.');
         setStatus('scanning', `Scanning ${base}.x…`);
         toast(`🔍 Scanning ${base}.x for agents…`);
@@ -1082,7 +1086,8 @@
         toast(`✅ Agent found: ${r.hostname}`);
         setStatus('', `${Object.keys(agents).length} agent(s)`);
       } else {
-        toast(`❌ No DigitalWellbeing agent at ${ip}:${PORT}`);
+        const target = ip.includes(':') ? ip : `${ip}:${PORT}`;
+        toast(`❌ No DigitalWellbeing agent at ${target}`);
         setStatus('error', 'Not reachable');
       }
       updateFleet();
@@ -1116,12 +1121,13 @@
           const badge = a.status === 'online'
             ? '<span class="badge badge-online">● Online</span>'
             : '<span class="badge badge-offline">● Offline</span>';
+          const displayAddr = ip.includes(':') ? ip : `${ip}:${PORT}`;
           return `
       <div class="agent-card${sel ? ' selected' : ''}" onclick="selectAgent('${esc(ip)}')">
         <div class="agent-card-top">
           <div>
             <div class="agent-hostname">${esc(a.hostname || a.ip)}</div>
-            <div class="agent-ip">${esc(ip)}:${PORT}</div>
+            <div class="agent-ip">${esc(displayAddr)}</div>
           </div>
           ${badge}
         </div>
@@ -1151,7 +1157,8 @@
       renderAgents();
       document.getElementById('dateInput').value = today();
       document.getElementById('dName').textContent = selected.hostname || selected.ip;
-      document.getElementById('dMeta').textContent = `${selected.ip} · v${selected.version || '?'} · Windows`;
+      const displayAddr = selected.ip.includes(':') ? selected.ip : `${selected.ip}:${PORT}`;
+      document.getElementById('dMeta').textContent = `${displayAddr} · v${selected.version || '?'} · ${selected.user ? selected.user + ' · ' : ''}Windows`;
       document.getElementById('dId').textContent = `Device ID: ${selected.device_id || '—'}`;
       document.getElementById('detailPanel').classList.add('visible');
       await loadDevice();
