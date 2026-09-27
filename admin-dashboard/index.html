@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DigitalWellbeing — Enterprise Admin Dashboard</title>
+  <meta name="description"
+    content="Enterprise Admin Dashboard for DigitalWellbeing. Monitor employee screen time and application usage across all devices on your network." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #0a0d14;
+      --surface: #111622;
+      --surface-2: #181e2e;
+      --surface-3: #1e2640;
+      --border: rgba(255, 255, 255, 0.07);
+      --border-active: rgba(99, 179, 237, 0.35);
+      --text: #e8ecf4;
+      --text-muted: #8892a4;
+      --text-faint: #4a5568;
+      --accent: #4f8ef7;
+      --accent-glow: rgba(79, 142, 247, 0.15);
+      --accent-2: #7c5af7;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --cyan: #22d3ee;
+      --radius: 14px;
+      --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+      --shadow-glow: 0 0 40px rgba(79, 142, 247, 0.1);
+    }
+
+    [data-theme="light"] {
+      --bg: #f0f4fa;
+      --surface: #ffffff;
+      --surface-2: #f7f9fc;
+      --surface-3: #edf2f7;
+      --border: rgba(0, 0, 0, 0.08);
+      --border-active: rgba(79, 142, 247, 0.4);
+      --text: #1a202c;
+      --text-muted: #4a5568;
+      --text-faint: #a0aec0;
+      --accent-glow: rgba(79, 142, 247, 0.08);
+      --shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+      --shadow-glow: 0 0 40px rgba(79, 142, 247, 0.05);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      height: 60px;
+      background: rgba(10, 13, 20, 0.9);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    [data-theme="light"] .topbar {
+      background: rgba(240, 244, 250, 0.95);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1)
+      }
+
+      50% {
+        opacity: 0.6;
+        transform: scale(0.85)
+      }
+    }
+
+    .brand-name {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid var(--border-active);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .status-dot.scanning {
+      background: var(--amber);
+      box-shadow: 0 0 6px var(--amber);
+    }
+
+    .status-dot.error {
+      background: var(--red);
+      box-shadow: 0 0 6px var(--red);
+      animation: none;
+    }
+
+    .btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 7px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.88;
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: var(--surface-3);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .theme-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+
+    .theme-btn:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .fleet-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 16px 28px;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .fleet-stats {
+      display: flex;
+      gap: 32px;
+    }
+
+    .fleet-stat {
+      text-align: center;
+    }
+
+    .fleet-stat-value {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    .fleet-stat-label {
+      font-size: 11px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .discovery-panel {
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 28px;
+    }
+
+    .discovery-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .discovery-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .discovery-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 6px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .input-group {
+      display: flex;
+      align-items: center;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      overflow: hidden;
+    }
+
+    .input-prefix {
+      padding: 0 10px;
+      font-size: 12px;
+      color: var(--text-faint);
+      border-right: 1px solid var(--border);
+      height: 36px;
+      display: flex;
+      align-items: center;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .input-group input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 13px;
+      padding: 0 12px;
+      font-family: 'JetBrains Mono', monospace;
+      width: 220px;
+      height: 36px;
+    }
+
+    .agents-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+      padding: 20px 28px;
+    }
+
+    .agent-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .agent-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .agent-card:hover {
+      border-color: var(--border-active);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+
+    .agent-card:hover::before {
+      opacity: 1;
+    }
+
+    .agent-card.selected {
+      border-color: var(--accent);
+      box-shadow: var(--shadow-glow);
+    }
+
+    .agent-card.selected::before {
+      opacity: 1;
+    }
+
+    .agent-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .agent-hostname {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .agent-ip {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent);
+      margin-top: 3px;
+    }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .badge-online {
+      background: rgba(52, 211, 153, 0.12);
+      color: var(--green);
+      border: 1px solid rgba(52, 211, 153, 0.25);
+    }
+
+    .badge-offline {
+      background: rgba(248, 113, 113, 0.12);
+      color: var(--red);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+    }
+
+    .agent-stats {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .agent-stat {
+      text-align: center;
+    }
+
+    .agent-stat-value {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .agent-stat-label {
+      font-size: 10px;
+      color: var(--text-faint);
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      text-align: center;
+      gap: 12px;
+      grid-column: 1/-1;
+    }
+
+    .scan-ring {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      animation: spin 1s linear infinite;
+      margin: 0 auto 8px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .empty-title {
+      font-size: 18px;
+      font-weight: 700;
+      opacity: 0.7;
+    }
+
+    .empty-body {
+      font-size: 14px;
+      color: var(--text-muted);
+      max-width: 440px;
+      line-height: 1.6;
+    }
+
+    .detail-panel {
+      padding: 24px 28px;
+      display: none;
+    }
+
+    .detail-panel.visible {
+      display: block;
+    }
+
+    .detail-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .device-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .device-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+
+    .device-name {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .device-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .device-id {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-faint);
+      margin-top: 4px;
+    }
+
+    .date-nav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .date-nav input {
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      border-radius: 8px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      transition: border-color 0.2s;
+    }
+
+    .kpi-card:hover {
+      border-color: var(--border-active);
+    }
+
+    .kpi-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-faint);
+    }
+
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 800;
+      margin-top: 8px;
+      letter-spacing: -1px;
+    }
+
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .tab-row {
+      display: flex;
+      gap: 4px;
+      background: var(--surface-3);
+      border-radius: 10px;
+      padding: 3px;
+      width: fit-content;
+      margin-bottom: 20px;
+    }
+
+    .tab-btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 6px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      background: transparent;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+
+    .tab-btn.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+
+    .tab-btn:hover:not(.active) {
+      color: var(--text);
+    }
+
+    .charts-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width:900px) {
+      .charts-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .chart-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .chart-container {
+      height: 200px;
+      position: relative;
+    }
+
+    .app-list {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .app-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .app-item:last-child {
+      border-bottom: none;
+    }
+
+    .app-rank {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--surface-3);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .app-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .app-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .app-exe {
+      font-size: 11px;
+      color: var(--text-faint);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .app-bar-wrap {
+      flex: 1;
+      min-width: 80px;
+    }
+
+    .app-bar-bg {
+      height: 6px;
+      border-radius: 3px;
+      background: var(--surface-3);
+      overflow: hidden;
+    }
+
+    .app-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width 0.6s ease;
+    }
+
+    .app-duration {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .heatmap-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+    }
+
+    .hm-cell {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      cursor: default;
+      transition: transform 0.15s;
+    }
+
+    .hm-cell:hover {
+      transform: scale(1.3);
+    }
+
+    .hm-l0 {
+      background: var(--surface-3);
+    }
+
+    .hm-l1 {
+      background: rgba(79, 142, 247, 0.25);
+    }
+
+    .hm-l2 {
+      background: rgba(79, 142, 247, 0.5);
+    }
+
+    .hm-l3 {
+      background: rgba(79, 142, 247, 0.75);
+    }
+
+    .hm-l4 {
+      background: var(--accent);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: var(--shadow);
+      z-index: 9999;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-dot"></div>
+      <span class="brand-name">DigitalWellbeing</span>
+      <span class="brand-badge">Admin</span>
+    </div>
+    <div class="topbar-right">
+      <div class="status-indicator">
+        <div class="status-dot scanning" id="statusDot"></div>
+        <span id="statusText">Initializing…</span>
+      </div>
+      <button class="btn btn-ghost" onclick="refreshAll()">↻ Refresh</button>
+      <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">🌙</button>
+    </div>
+  </header>
+
+  <div class="fleet-bar">
+    <div>
+      <div class="section-label">Fleet Overview</div>
+      <div style="font-size:15px;font-weight:700;">DigitalWellbeing Enterprise</div>
+    </div>
+    <div class="fleet-stats">
+      <div class="fleet-stat">
+        <div class="fleet-stat-value" id="fleetOnline">0</div>
+        <div class="fleet-stat-label">Online</div>
+      </div>
+      <div class="fleet-stat">
+        <div class="fleet-stat-value" id="fleetTotal">0</div>
+        <div class="fleet-stat-label">Total Agents</div>
+      </div>
+      <div class="fleet-stat">
+        <div class="fleet-stat-value" id="fleetAvg">—</div>
+        <div class="fleet-stat-label">Avg Screen Time</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="discovery-panel">
+    <div class="discovery-top">
+      <div>
+        <div class="section-label">Agent Discovery</div>
+        <div class="discovery-title">Network Devices</div>
+        <div class="discovery-subtitle">HTTP probe on port 7842 · Scanning common LAN subnets automatically</div>
+      </div>
+      <div class="controls">
+        <div class="input-group">
+          <span class="input-prefix">IP / Subnet</span>
+          <input type="text" id="manualIp" placeholder="192.168.1.105 or 192.168.1"
+            onkeydown="if(event.key==='Enter')addManual()" />
+        </div>
+        <button class="btn btn-ghost" onclick="addManual()">+ Add</button>
+        <button class="btn btn-primary" onclick="discover()">Scan Network</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="empty-state" id="emptyState">
+    <div class="scan-ring"></div>
+    <div class="empty-title">Scanning your network…</div>
+    <div class="empty-body">
+      DigitalWellbeing agents expose an HTTP API on port 7842. This dashboard probes common subnets to discover all
+      running agents.<br /><br />
+      You can also type an IP address above to add an agent manually.
+    </div>
+  </div>
+
+  <div class="agents-grid" id="agentsGrid" style="display:none;"></div>
+
+  <!-- Device detail -->
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-header">
+      <div class="device-info">
+        <div class="device-avatar">💻</div>
+        <div>
+          <div class="device-name" id="dName">—</div>
+          <div class="device-meta" id="dMeta">—</div>
+          <div class="device-id" id="dId">—</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="date-nav">
+          <input type="date" id="dateInput" onchange="loadDevice()" />
+          <button class="btn btn-ghost" onclick="goToday()">Today</button>
+        </div>
+        <button class="btn btn-ghost" onclick="closeDetail()">✕ Close</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Screen Time</div>
+        <div class="kpi-value" id="kpiST" style="color:var(--accent)">—</div>
+        <div class="kpi-sub">Active duration today</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Applications</div>
+        <div class="kpi-value" id="kpiApps" style="color:var(--accent-2)">—</div>
+        <div class="kpi-sub">Unique apps tracked</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Daily Avg</div>
+        <div class="kpi-value" id="kpiDAvg" style="color:var(--green)">—</div>
+        <div class="kpi-sub">Historical average</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Weekly Avg</div>
+        <div class="kpi-value" id="kpiWAvg" style="color:var(--cyan)">—</div>
+        <div class="kpi-sub">Per-week average</div>
+      </div>
+    </div>
+
+    <div class="tab-row">
+      <button class="tab-btn active" id="tabBtnOverview" onclick="switchTab('overview',this)">Overview</button>
+      <button class="tab-btn" id="tabBtnApps" onclick="switchTab('apps',this)">Applications</button>
+      <button class="tab-btn" id="tabBtnHeatmap" onclick="switchTab('heatmap',this)">Heatmap</button>
+    </div>
+
+    <div id="tabOverview">
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title">Hourly Activity (Minutes)</div>
+          <div class="chart-container"><canvas id="tlChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Category Breakdown</div>
+          <div class="chart-container"><canvas id="catChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tabApps" style="display:none;">
+      <div class="app-list">
+        <div class="chart-title" style="margin-bottom:12px;">Top Applications</div>
+        <div id="appList"></div>
+      </div>
+    </div>
+
+    <div id="tabHeatmap" style="display:none;">
+      <div class="chart-card">
+        <div class="chart-title">Daily Screen Time — Last 120 Days</div>
+        <div class="heatmap-grid" id="hmGrid" style="margin-top:12px;"></div>
+        <div
+          style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:12px;font-size:11px;color:var(--text-faint);">
+          <span>Less</span>
+          <div class="hm-cell hm-l0" style="width:12px;height:12px;"></div>
+          <div class="hm-cell hm-l1" style="width:12px;height:12px;"></div>
+          <div class="hm-cell hm-l2" style="width:12px;height:12px;"></div>
+          <div class="hm-cell hm-l3" style="width:12px;height:12px;"></div>
+          <div class="hm-cell hm-l4" style="width:12px;height:12px;"></div>
+          <span>More</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const PORT = 7842;
+    let agents = {};
+    let selected = null;
+    let tlChart = null, catChart = null;
+    let pollTimer = null, devTimer = null;
+
+    // ── Utils ──────────────────────────────────────────────────────────────────
+    function fmt(s) {
+      if (!s || s <= 0) return '0m';
+      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+    function today() { return new Date().toISOString().split('T')[0]; }
+    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    function toast(msg, dur = 3000) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('visible');
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.classList.remove('visible'), dur);
+    }
+
+    function setStatus(type, text) {
+      const dot = document.getElementById('statusDot');
+      dot.className = 'status-dot' + (type === 'scanning' ? ' scanning' : type === 'error' ? ' error' : '');
+      document.getElementById('statusText').textContent = text;
+    }
+
+    // ── Theme ──────────────────────────────────────────────────────────────────
+    function toggleTheme() {
+      const html = document.documentElement;
+      const dark = html.getAttribute('data-theme') === 'dark';
+      html.setAttribute('data-theme', dark ? 'light' : 'dark');
+      document.getElementById('themeBtn').textContent = dark ? '☀️' : '🌙';
+      localStorage.setItem('dw-admin-theme', dark ? 'light' : 'dark');
+      if (selected) reloadCharts();
+    }
+    const saved = localStorage.getItem('dw-admin-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', saved);
+    document.getElementById('themeBtn').textContent = saved === 'dark' ? '🌙' : '☀️';
+
+    // ── Fetch ──────────────────────────────────────────────────────────────────
+    async function api(ip, path, params = {}) {
+      const qs = new URLSearchParams(params).toString();
+      const url = `http://${ip}:${PORT}${path}${qs ? '?' + qs : ''}`;
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 4000);
+      try {
+        const r = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      } catch (e) { clearTimeout(t); throw e; }
+    }
+
+    async function probe(ip) {
+      try {
+        const info = await api(ip, '/api/info');
+        if (info && info.app === 'DigitalWellbeing') return { ip, ...info, status: 'online' };
+        return null;
+      } catch { return null; }
+    }
+
+    // ── Discovery ──────────────────────────────────────────────────────────────
+    async function scanSubnet(base) {
+      const ps = [];
+      for (let i = 1; i <= 254; i++) ps.push(probe(`${base}.${i}`));
+      const res = await Promise.allSettled(ps);
+      return res.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean);
+    }
+
+    async function discover() {
+      setStatus('scanning', 'Scanning LAN…');
+      toast('🔍 Scanning your network for agents…');
+      let found = 0;
+      // Always probe loopback/localhost first for immediate detection on local machine
+      try {
+        const local = await probe('127.0.0.1');
+        if (local) { register(local); found++; }
+      } catch (e) { }
+
+      const subnets = ['192.168.1', '192.168.0', '10.0.0', '10.0.1', '172.16.0'];
+      for (const s of subnets) {
+        const rs = await scanSubnet(s);
+        rs.forEach(r => { if (r && !agents[r.ip]) { register(r); found++; } });
+        if (found > 0) break;
+      }
+      if (!Object.keys(agents).length) {
+        setStatus('error', 'No agents found — add manually');
+        toast('⚠️ No agents found. Enter an IP above.');
+      } else {
+        setStatus('', `${Object.keys(agents).length} agent(s) found`);
+        toast(`✅ Found ${Object.keys(agents).length} DigitalWellbeing agent(s)!`);
+      }
+      updateFleet();
+    }
+
+    async function addManual() {
+      let ip = document.getElementById('manualIp').value.trim();
+      if (!ip) return;
+      const parts = ip.split('.');
+      // Subnet entry (3 octets or ends with .0)
+      if (parts.length === 3 || ip.endsWith('.0')) {
+        const base = parts.length === 3 ? ip : parts.slice(0, 3).join('.');
+        setStatus('scanning', `Scanning ${base}.x…`);
+        toast(`🔍 Scanning ${base}.x for agents…`);
+        const rs = await scanSubnet(base);
+        let found = 0;
+        rs.forEach(r => { if (r) { register(r); found++; } });
+        toast(found ? `✅ Found ${found} agent(s) on ${base}.x` : `⚠️ No agents on ${base}.x`);
+        setStatus('', found ? `${Object.keys(agents).length} agent(s)` : 'None found');
+        updateFleet();
+        return;
+      }
+      setStatus('scanning', `Probing ${ip}…`);
+      const r = await probe(ip);
+      if (r) {
+        register(r);
+        toast(`✅ Agent found: ${r.hostname}`);
+        setStatus('', `${Object.keys(agents).length} agent(s)`);
+      } else {
+        toast(`❌ No DigitalWellbeing agent at ${ip}:${PORT}`);
+        setStatus('error', 'Not reachable');
+      }
+      updateFleet();
+      document.getElementById('manualIp').value = '';
+    }
+
+    function register(info) {
+      agents[info.ip] = { ...(agents[info.ip] || {}), ...info, status: 'online', lastSeen: Date.now() };
+      renderAgents();
+    }
+
+    // ── Render agents ──────────────────────────────────────────────────────────
+    function renderAgents() {
+      const grid = document.getElementById('agentsGrid');
+      const empty = document.getElementById('emptyState');
+      const keys = Object.keys(agents);
+      if (!keys.length) {
+        if (empty) empty.style.display = 'flex';
+        if (grid) {
+          grid.style.display = 'none';
+          grid.innerHTML = '';
+        }
+        return;
+      }
+      if (empty) empty.style.display = 'none';
+      if (grid) {
+        grid.style.display = 'grid';
+        grid.innerHTML = keys.map(ip => {
+          const a = agents[ip];
+          const sel = selected && selected.ip === ip;
+          const badge = a.status === 'online'
+            ? '<span class="badge badge-online">● Online</span>'
+            : '<span class="badge badge-offline">● Offline</span>';
+          return `
+      <div class="agent-card${sel ? ' selected' : ''}" onclick="selectAgent('${esc(ip)}')">
+        <div class="agent-card-top">
+          <div>
+            <div class="agent-hostname">${esc(a.hostname || a.ip)}</div>
+            <div class="agent-ip">${esc(ip)}:${PORT}</div>
+          </div>
+          ${badge}
+        </div>
+        <div class="agent-stats">
+          <div class="agent-stat">
+            <div class="agent-stat-value">${a.screenTime != null ? fmt(a.screenTime) : '—'}</div>
+            <div class="agent-stat-label">Screen Time</div>
+          </div>
+          <div class="agent-stat">
+            <div class="agent-stat-value">${a.appCount != null ? a.appCount : '—'}</div>
+            <div class="agent-stat-label">Apps</div>
+          </div>
+          <div class="agent-stat">
+            <div class="agent-stat-value">${esc(a.version || '—')}</div>
+            <div class="agent-stat-label">Version</div>
+          </div>
+        </div>
+      </div>
+    `;
+        }).join('');
+      }
+    }
+
+    // ── Select device ──────────────────────────────────────────────────────────
+    async function selectAgent(ip) {
+      selected = agents[ip];
+      renderAgents();
+      document.getElementById('dateInput').value = today();
+      document.getElementById('dName').textContent = selected.hostname || selected.ip;
+      document.getElementById('dMeta').textContent = `${selected.ip} · v${selected.version || '?'} · Windows`;
+      document.getElementById('dId').textContent = `Device ID: ${selected.device_id || '—'}`;
+      document.getElementById('detailPanel').classList.add('visible');
+      await loadDevice();
+      clearInterval(devTimer);
+      devTimer = setInterval(loadDevice, 10000);
+    }
+
+    function closeDetail() {
+      selected = null; clearInterval(devTimer);
+      document.getElementById('detailPanel').classList.remove('visible');
+      renderAgents();
+    }
+
+    async function loadDevice() {
+      if (!selected) return;
+      const date = document.getElementById('dateInput').value || today();
+      const ip = selected.ip;
+      try {
+        const [apps, cats, tl, avg, hm] = await Promise.all([
+          api(ip, '/api/top_apps', { date, limit: 10 }),
+          api(ip, '/api/categories', { date }),
+          api(ip, '/api/timeline', { date }),
+          api(ip, '/api/avg_stats'),
+          api(ip, '/api/heatmap'),
+        ]);
+        const total = apps.reduce((s, a) => s + a.total_seconds, 0);
+        document.getElementById('kpiST').textContent = fmt(total);
+        document.getElementById('kpiApps').textContent = apps.length;
+        document.getElementById('kpiDAvg').textContent = fmt(avg.daily_avg_seconds);
+        document.getElementById('kpiWAvg').textContent = fmt(avg.weekly_avg_seconds);
+        drawTimeline(tl);
+        drawCategories(cats);
+        drawApps(apps, total);
+        drawHeatmap(hm);
+        agents[ip].screenTime = total;
+        agents[ip].appCount = apps.length;
+        renderAgents(); updateFleet();
+      } catch (e) {
+        console.warn('Load device failed', e);
+        if (agents[ip]) agents[ip].status = 'offline';
+        renderAgents();
+      }
+    }
+
+    function goToday() { document.getElementById('dateInput').value = today(); loadDevice(); }
+
+    // ── Charts ─────────────────────────────────────────────────────────────────
+    function gc() {
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      return { grid: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', tick: dark ? '#4a5568' : '#a0aec0' };
+    }
+
+    function drawTimeline(data) {
+      const ctx = document.getElementById('tlChart').getContext('2d');
+      const labels = data.map(d => { const h = d.hour, ap = h >= 12 ? 'PM' : 'AM', dh = h % 12 === 0 ? 12 : h % 12; return `${dh}${ap}`; });
+      const vals = data.map(d => Math.round(d.total_seconds / 60));
+      if (tlChart) tlChart.destroy();
+      const { grid, tick } = gc();
+      tlChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets: [{ data: vals, borderColor: '#4f8ef7', backgroundColor: 'rgba(79,142,247,0.12)', fill: true, tension: 0.4, pointRadius: 3, pointHoverRadius: 6, borderWidth: 2 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.raw}m active` } } }, scales: { x: { grid: { color: grid }, ticks: { color: tick, font: { size: 10 } } }, y: { grid: { color: grid }, ticks: { color: tick, font: { size: 10 } } } } }
+      });
+    }
+
+    function drawCategories(data) {
+      const ctx = document.getElementById('catChart').getContext('2d');
+      if (catChart) catChart.destroy();
+      const colors = ['#4f8ef7', '#7c5af7', '#34d399', '#fbbf24', '#f87171', '#22d3ee', '#f59e0b', '#a78bfa'];
+      if (!data || !data.length) {
+        catChart = new Chart(ctx, { type: 'doughnut', data: { labels: ['No data'], datasets: [{ data: [1], backgroundColor: ['#2d3748'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+        return;
+      }
+      const { tick } = gc();
+      catChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: { labels: data.map(d => d.category), datasets: [{ data: data.map(d => Math.round(d.total_seconds / 60)), backgroundColor: data.map((_, i) => colors[i % colors.length]), borderWidth: 0, hoverOffset: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, color: tick } }, tooltip: { callbacks: { label: c => `${c.label}: ${c.raw}m` } } }, cutout: '65%' }
+      });
+    }
+
+    function reloadCharts() { if (selected) loadDevice(); }
+
+    function drawApps(apps, total) {
+      const el = document.getElementById('appList');
+      if (!apps || !apps.length) { el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-faint);">No app data.</div>'; return; }
+      el.innerHTML = apps.map((a, i) => {
+        const pct = total > 0 ? Math.round((a.total_seconds / total) * 100) : 0;
+        return `<div class="app-item">
+      <div class="app-rank">${i + 1}</div>
+      <div class="app-info">
+        <div class="app-name">${esc(a.display_name)}</div>
+        <div class="app-exe">${esc(a.executable_name)}</div>
+      </div>
+      <div class="app-bar-wrap">
+        <div class="app-bar-bg"><div class="app-bar-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div class="app-duration">${fmt(a.total_seconds)} <span style="color:var(--text-faint)">(${pct}%)</span></div>
+    </div>`;
+      }).join('');
+    }
+
+    function drawHeatmap(data) {
+      const lk = {};
+      data.forEach(d => lk[d.date] = d.count);
+      const now = new Date(), cells = [];
+      for (let i = 119; i >= 0; i--) {
+        const d = new Date(now); d.setDate(now.getDate() - i);
+        const ds = d.toISOString().split('T')[0];
+        const s = lk[ds] || 0;
+        let l = 0;
+        if (s > 0 && s <= 1800) l = 1;
+        else if (s > 1800 && s <= 7200) l = 2;
+        else if (s > 7200 && s <= 14400) l = 3;
+        else if (s > 14400) l = 4;
+        cells.push(`<div class="hm-cell hm-l${l}" title="${ds}: ${fmt(s)}"></div>`);
+      }
+      document.getElementById('hmGrid').innerHTML = cells.join('');
+    }
+
+    // ── Fleet stats ────────────────────────────────────────────────────────────
+    function updateFleet() {
+      const all = Object.values(agents);
+      const on = all.filter(a => a.status === 'online');
+      document.getElementById('fleetOnline').textContent = on.length;
+      document.getElementById('fleetTotal').textContent = all.length;
+      const avg = on.length && on.some(a => a.screenTime) ? on.filter(a => a.screenTime).reduce((s, a) => s + a.screenTime, 0) / on.filter(a => a.screenTime).length : 0;
+      document.getElementById('fleetAvg').textContent = avg > 0 ? fmt(avg) : '—';
+    }
+
+    // ── Tabs ───────────────────────────────────────────────────────────────────
+    function switchTab(name, btn) {
+      ['Overview', 'Apps', 'Heatmap'].forEach(t => {
+        document.getElementById('tab' + t).style.display = t.toLowerCase() === name ? 'block' : 'none';
+      });
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (name === 'overview' && selected) reloadCharts();
+    }
+
+    // ── Poll ───────────────────────────────────────────────────────────────────
+    async function refreshAll() {
+      if (!Object.keys(agents).length) { discover(); return; }
+      setStatus('scanning', 'Refreshing…');
+      await Promise.all(Object.keys(agents).map(async ip => {
+        const r = await probe(ip);
+        agents[ip] = r ? { ...agents[ip], ...r, status: 'online', lastSeen: Date.now() } : { ...agents[ip], status: 'offline' };
+      }));
+      const on = Object.values(agents).filter(a => a.status === 'online').length;
+      setStatus('', `${on}/${Object.keys(agents).length} online`);
+      renderAgents(); updateFleet();
+      if (selected) loadDevice();
+    }
+
+    // ── Init ───────────────────────────────────────────────────────────────────
+    document.getElementById('dateInput').value = today();
+    discover().then(() => {
+      setInterval(refreshAll, 8000);
+      if (Object.keys(agents).length) setStatus('', `${Object.keys(agents).length} agent(s) found`);
+    });
+  </script>
+</body>
+
+</html>

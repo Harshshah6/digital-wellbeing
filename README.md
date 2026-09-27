@@ -1,107 +1,110 @@
-# Aura Wellbeing
+# DigitalWellbeing Enterprise
 
-A premium, privacy-first, cross-platform digital wellbeing and productivity tracking desktop application. Built with **Tauri v2**, **React**, **TypeScript**, **Rust**, and **SQLite**. 
+> **Windows-only** enterprise employee digital wellbeing monitoring system.
 
-Aura Wellbeing runs completely locally to track active application usage, analyze trends, monitor focus blocks, and help you maintain a healthy digital lifestyle without compromising your privacy.
+## Architecture
 
----
-<img src=".github/assets/OGAuraWellbeing.png" alt="Banner" width="100%" />
-
-## Key Features
-
-- **Intelligent Active App Tracking**: Monitors foreground window transitions and user activity levels (idle detection) using high-performance, native Rust APIs.
-- **Absolute Privacy-First (Local SQLite)**: All tracking data, settings, and goals are saved in a local SQLite database (`aura_wellbeing.db`). No cloud sync, no tracking servers, no leaks.
-- **Dynamic Interactive Dashboard**: High-fidelity, custom-designed charts and heatmaps visualizing hourly usage distributions, categories, and specific app trends.
-- **Focus Mode & Goals**: Configure custom focus sessions and daily usage limit goals with real-time tracking to stay disciplined.
-- **Premium macOS-Inspired UI**: A gorgeous, fluid, frosted-glass interface with pixel-perfect responsive layouts, smooth micro-animations, and complete custom dark/light modes.
-- **Seamless System Tray Integration**: Operates silently in the background, featuring "Close to Tray" and left-click to toggle the GUI or right-click to control the application.
-- **Intelligent Autostart**: System startup integration for Windows, macOS, and Linux, starting silently in the background on login (without opening the GUI window).
-
----
-
-## Technology Stack
-
-- **Frontend**: React 19, TypeScript, Recharts (custom styled), Lucide React Icons
-- **Backend & Native Integration**: Rust, Tauri v2
-- **Database**: SQLite (via SQLx)
-- **Styling**: Pure CSS with responsive viewport calculations, HSL theme tokens, and dynamic CSS-variable dark mode.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-1. **Node.js**: v18 or later
-2. **Rust & Cargo**: Latest stable toolchain (see [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/))
-3. **Platform Build Tools**:
-   - **Windows**: Build Tools for Visual Studio 2022 (C++ desktop development workload)
-   - **macOS**: Xcode Command Line Tools
-   - **Linux**: Build essentials, `webkit2gtk`, and system library dependencies
-
-### Development Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/harshshah6/AuraWellbeing
-   cd pc-digital-wellbeing
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Run the application in development mode:**
-   ```bash
-   npm run tauri:dev
-   ```
-
----
-
-## Production Builds
-
-Build highly optimized, native installers for your current platform:
-
-```bash
-# General production build
-npm run tauri:build
-
-# Target-specific installers (configured for releases)
-npm run tauri:build-win     # Generates NSIS (.exe) and MSI installers
-npm run tauri:build-linux   # Generates Debian (.deb) and AppImage packages
-npm run tauri:build-mac     # Generates DMG and Apple App packages
+```
+┌─────────────────────────────────────┐    LAN
+│   Employee PC (Windows)             │
+│   ┌────────────────────────────┐    │
+│   │  DigitalWellbeing Agent    │◄───┼── System Tray (background)
+│   │  (Tauri + Rust)            │    │
+│   │  ┌──────────────────────┐  │    │
+│   │  │  SQLite DB           │  │    │
+│   │  │  (local, per-device) │  │    │
+│   │  └──────────────────────┘  │    │
+│   │  ┌──────────────────────┐  │    │
+│   │  │  HTTP REST API       │  │◄───┼── Admin Dashboard polls
+│   │  │  port 7842           │  │    │   http://<ip>:7842/api/...
+│   │  └──────────────────────┘  │    │
+│   │  ┌──────────────────────┐  │    │
+│   │  │  UDP Beacon          │  │──► │── broadcasts every 5s
+│   │  │  port 7843           │  │    │   {hostname, ip, device_id}
+│   │  └──────────────────────┘  │    │
+│   └────────────────────────────┘    │
+└─────────────────────────────────────┘
+         ▲
+         │ HTTP GET (probes every 8s)
+         │
+┌─────────────────────────────────────┐
+│   Admin's Browser (any OS)          │
+│   admin-dashboard/index.html        │
+│   (standalone HTML — no install)    │
+└─────────────────────────────────────┘
 ```
 
-Output bundles are placed under `src-tauri/target/release/bundle/`.
+## Quick Start
 
----
+### 1. Deploy Agent on Employee PCs
 
-## Utilities
+Install/run `DigitalWellbeing.exe` on each Windows PC. The agent will:
+- Track active application usage every second
+- Store data locally in SQLite at `%LOCALAPPDATA%\com.digitalwellbeing.agent\wellbeing.db`
+- Start automatically on Windows login (configurable in Settings)
+- **Expose REST API on `http://0.0.0.0:7842`** (LAN-accessible)
+- **Broadcast UDP beacon to subnet on port 7843** every 5 seconds
 
-Clean up large build directories and Vite cache to free up disk space:
+### 2. Open Admin Dashboard
+
+Open `admin-dashboard/index.html` in any modern browser (Chrome, Edge, Firefox).
+
+The dashboard will:
+1. **Auto-scan** common LAN subnets (`192.168.1.x`, `192.168.0.x`, `10.0.0.x`, etc.)
+2. **Detect** any machine running the DigitalWellbeing agent
+3. **Display** live fleet overview (online count, avg screen time)
+4. **Allow drilling** into any device for full detail
+
+You can also enter an IP address or subnet manually (e.g., `192.168.2` to scan all 192.168.2.x hosts).
+
+## API Reference
+
+All endpoints are served on `http://<agent-ip>:7842`. CORS is fully open so the dashboard can query from any origin.
+
+| Endpoint | Method | Query Params | Description |
+|---|---|---|---|
+| `/api/info` | GET | — | Agent metadata (hostname, IP, device ID, version) |
+| `/api/top_apps` | GET | `date=YYYY-MM-DD&limit=10` | Top apps by screen time |
+| `/api/categories` | GET | `date=YYYY-MM-DD` | Category breakdown |
+| `/api/timeline` | GET | `date=YYYY-MM-DD` | Hourly activity (24 buckets) |
+| `/api/heatmap` | GET | — | All-time daily screen time totals |
+| `/api/avg_stats` | GET | — | Daily/weekly/monthly/yearly averages |
+
+### Example
 
 ```bash
-npm run clean
+# Get today's top apps from device at 192.168.1.105
+curl http://192.168.1.105:7842/api/top_apps?date=2026-09-27&limit=5
+
+# Get agent info
+curl http://192.168.1.105:7842/api/info
 ```
-*This removes build directories (`dist`, `src-tauri/target`), generated schemas, and cache folders.*
 
----
+## Network Requirements
 
-## Architecture & Core Files
+| Port | Protocol | Direction | Purpose |
+|---|---|---|---|
+| `7842` | TCP/HTTP | Inbound on agent PCs | REST API for admin dashboard |
+| `7843` | UDP/Broadcast | Outbound from agent PCs | Discovery beacon |
 
-- **`src-tauri/src/tracker.rs`**: Core Rust monitor querying native OS active window handles (e.g., Win32 API) and tracking active times.
-- **`src-tauri/src/db.rs`**: SQLite initialization, migrations, and clean interface for storing tracking logs.
-- **`src-tauri/src/lib.rs`**: System tray lifecycle management, window behavior, and event listeners.
-- **`src-tauri/src/commands.rs`**: Safe IPC bridge commands mapping React states directly to the Rust system layer (e.g., autostart registry configs, focus states).
-- **`src/App.tsx`**: Dynamic dashboard UI routing between Dashboard, Insights, Goals, Focus, and Settings.
-- **`design.md`**: Master design layout containing layout structures, spacing guidelines, typography tokens, and light/dark HSL themes.
+> **Firewall note:** Ensure port 7842 is allowed for inbound TCP on the agent PCs in Windows Defender Firewall. You can add a rule via:
+> ```powershell
+> netsh advfirewall firewall add rule name="DigitalWellbeing API" dir=in action=allow protocol=TCP localport=7842
+> ```
 
----
+## Building
 
-## CI/CD Deployment
+```powershell
+# Development
+npm run tauri:dev
 
-The project includes a fully automated GitHub Actions pipeline under `.github/workflows/release.yml`. When you push a tag matching `v*` (e.g. `v1.0.0`), the workflow:
-1. Runs compilation and bundling for Windows, macOS, and Linux.
-2. Compiles for both Intel and Apple Silicon architectures on macOS.
-3. Automatically drafts a GitHub Release containing all installer assets (.exe, .msi, .dmg, .deb, .AppImage).
+# Production (Windows installer: .msi + .exe)
+npm run tauri:build-win
+```
+
+## Data Privacy
+
+- All data is stored **locally on each device** in SQLite
+- The REST API exposes read-only endpoints — no write access from the network
+- The admin dashboard **never uploads** any data to external servers
+- Suitable for internal corporate networks

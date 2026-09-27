@@ -9,6 +9,7 @@ mod db;
 mod idle;
 mod tracker;
 mod commands;
+mod api_server;
 
 use tracker::TrackerState;
 
@@ -73,18 +74,21 @@ pub fn run() {
             }
             commands::BACKGROUND_ENABLED.store(autostart_enabled, Ordering::Relaxed);
 
-            let tracker_state = Arc::new(Mutex::new(TrackerState::new(pool)));
+            let tracker_state = Arc::new(Mutex::new(TrackerState::new(pool.clone())));
             app.manage(tracker_state.clone());
-            tracker::start_tracker_loop(tracker_state);
+            tracker::start_tracker_loop(tracker_state.clone());
+
+            // ─── Enterprise: Start HTTP REST API + UDP Beacon ───
+            api_server::start_enterprise_services(tracker_state, pool);
 
             // ─── System Tray ───
-            let show_item = MenuItem::with_id(app, "show", "Show Aura", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit Aura", true, None::<&str>)?;
+            let show_item = MenuItem::with_id(app, "show", "Show Digital Wellbeing", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit Agent", true, None::<&str>)?;
             let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("Aura Wellbeing")
+                .tooltip("Digital Wellbeing Agent")
                 .menu(&tray_menu)
                 .on_menu_event(|app, event| {
                     match event.id.as_ref() {

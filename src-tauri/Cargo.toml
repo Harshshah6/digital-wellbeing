@@ -1,7 +1,7 @@
 [package]
-name = "aura-wellbeing"
-version = "1.0.3"
-description = "Aura Wellbeing — Digital Wellbeing Desktop Application"
+name = "digital-wellbeing"
+version = "1.0.0"
+description = "DigitalWellbeing — Enterprise Employee Digital Wellbeing Agent"
 authors = ["Harshshah6"]
 edition = "2021"
 
@@ -28,6 +28,10 @@ chrono = { version = "0.4", features = ["serde"] }
 once_cell = "1.18"
 tauri-plugin-single-instance = "2"
 rfd = "0.14"
+axum = { version = "0.7", features = ["tokio"] }
+tower-http = { version = "0.5", features = ["cors"] }
+uuid = { version = "1", features = ["v4"] }
+hostname = "0.3"
 
 
 [target.'cfg(target_os = "windows")'.dependencies]

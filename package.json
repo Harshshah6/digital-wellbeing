@@ -1,7 +1,7 @@
 {
-  "name": "aura-wellbeing",
+  "name": "digital-wellbeing",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,16 +11,14 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:build-win": "tauri build --bundles nsis,msi",
-    "tauri:build-linux": "tauri build --bundles deb,appimage",
-    "tauri:build-mac": "tauri build --bundles dmg,app",
+    "build:portable": "node scripts/build-portable.js",
+    "build:full": "npm run tauri:build-win && npm run build:portable",
     "clean": "node scripts/clean.js",
     "seed": "node scripts/seed-data.js",
     "version:sync": "node scripts/sync-version.js",
     "prebuild": "npm run version:sync",
     "predev": "npm run version:sync",
-    "pretauri:build-win": "npm run version:sync",
-    "pretauri:build-linux": "npm run version:sync",
-    "pretauri:build-mac": "npm run version:sync"
+    "pretauri:build-win": "npm run version:sync"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

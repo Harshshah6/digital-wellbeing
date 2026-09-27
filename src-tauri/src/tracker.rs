@@ -101,73 +101,8 @@ pub fn get_active_window_info() -> Option<(String, String)> {
 
 #[cfg(not(target_os = "windows"))]
 pub fn get_active_window_info() -> Option<(String, String)> {
-    use std::process::Command;
-
-    // Try Hyprland
-    if let Ok(output) = Command::new("hyprctl").args(["activewindow", "-j"]).output() {
-        if output.status.success() {
-            if let Ok(json) = String::from_utf8(output.stdout) {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json) {
-                    if let (Some(class), Some(title)) = (val.get("class").and_then(|v| v.as_str()), val.get("title").and_then(|v| v.as_str())) {
-                        return Some((class.to_string(), title.to_string()));
-                    }
-                }
-            }
-        }
-    }
-
-    // Try Sway
-    if let Ok(output) = Command::new("swaymsg").args(["-t", "get_tree"]).output() {
-        if output.status.success() {
-            if let Ok(json) = String::from_utf8(output.stdout) {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json) {
-                    fn find_focused<'a>(node: &'a serde_json::Value) -> Option<&'a serde_json::Value> {
-                        if node.get("focused").and_then(|f| f.as_bool()).unwrap_or(false) {
-                            return Some(node);
-                        }
-                        if let Some(nodes) = node.get("nodes").and_then(|n| n.as_array()) {
-                            for child in nodes {
-                                if let Some(found) = find_focused(child) {
-                                    return Some(found);
-                                }
-                            }
-                        }
-                        if let Some(floating) = node.get("floating_nodes").and_then(|n| n.as_array()) {
-                            for child in floating {
-                                if let Some(found) = find_focused(child) {
-                                    return Some(found);
-                                }
-                            }
-                        }
-                        None
-                    }
-                    if let Some(focused) = find_focused(&val) {
-                        let app_id = focused.get("app_id").and_then(|v| v.as_str())
-                            .or_else(|| focused.get("window_properties").and_then(|wp| wp.get("class").and_then(|v| v.as_str())))
-                            .unwrap_or("Unknown").to_string();
-                        let title = focused.get("name").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string();
-                        return Some((app_id, title));
-                    }
-                }
-            }
-        }
-    }
-
-    // Try xdotool (X11)
-    if let Ok(output) = Command::new("xdotool").args(["getactivewindow", "getwindowclassname"]).output() {
-        if output.status.success() {
-            if let Ok(class) = String::from_utf8(output.stdout) {
-                if let Ok(output2) = Command::new("xdotool").args(["getactivewindow", "getwindowname"]).output() {
-                    if let Ok(title) = String::from_utf8(output2.stdout) {
-                        return Some((class.trim().to_string(), title.trim().to_string()));
-                    }
-                }
-            }
-        }
-    }
-
-    // Fallback for Linux
-    Some(("Unknown Linux App".to_string(), "Unknown Window".to_string()))
+    // DigitalWellbeing is Windows-only
+    None
 }
 
 // Write the accumulated tracking block to the DB

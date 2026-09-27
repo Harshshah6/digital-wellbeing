@@ -429,11 +429,11 @@ pub static BACKGROUND_ENABLED: AtomicBool = AtomicBool::new(true);
 /// so that dev and production don't overwrite each other.
 #[cfg(target_os = "windows")]
 #[cfg(debug_assertions)]
-const AUTOSTART_REG_NAME: &str = "AuraWellbeing-Dev";
+const AUTOSTART_REG_NAME: &str = "DigitalWellbeing-Dev";
 
 #[cfg(target_os = "windows")]
 #[cfg(not(debug_assertions))]
-const AUTOSTART_REG_NAME: &str = "AuraWellbeing";
+const AUTOSTART_REG_NAME: &str = "DigitalWellbeing";
 
 #[cfg(target_os = "windows")]
 fn get_exe_path() -> Option<String> {
@@ -481,66 +481,10 @@ pub fn autostart_set(enabled: bool) -> Result<(), String> {
 
 
 
-#[cfg(target_os = "macos")]
-pub fn autostart_set(enabled: bool) -> Result<(), String> {
-    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
-    let plist_path = format!("{}/Library/LaunchAgents/com.aura.wellbeing.plist", home);
-
-    if enabled {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let exe_str = exe.to_str().ok_or("Invalid exe path")?;
-        let plist_content = format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.aura.wellbeing</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>{}</string>
-        <string>--background</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-</dict>
-</plist>"#,
-            exe_str
-        );
-        std::fs::write(&plist_path, plist_content).map_err(|e| e.to_string())?;
-        Ok(())
-    } else {
-        if std::path::Path::new(&plist_path).exists() {
-            std::fs::remove_file(&plist_path).map_err(|e| e.to_string())?;
-        }
-        Ok(())
-    }
-}
-
-
-
-#[cfg(target_os = "linux")]
-pub fn autostart_set(enabled: bool) -> Result<(), String> {
-    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
-    let autostart_dir = format!("{}/.config/autostart", home);
-    let desktop_path = format!("{}/aura-wellbeing.desktop", autostart_dir);
-
-    if enabled {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let exe_str = exe.to_str().ok_or("Invalid exe path")?;
-        std::fs::create_dir_all(&autostart_dir).map_err(|e| e.to_string())?;
-        let content = format!(
-            "[Desktop Entry]\nType=Application\nName=Aura Wellbeing\nExec=\"{}\" --background\nX-GNOME-Autostart-enabled=true\n",
-            exe_str
-        );
-        std::fs::write(&desktop_path, content).map_err(|e| e.to_string())?;
-        Ok(())
-    } else {
-        if std::path::Path::new(&desktop_path).exists() {
-            std::fs::remove_file(&desktop_path).map_err(|e| e.to_string())?;
-        }
-        Ok(())
-    }
+// Windows-only autostart. This app is Windows-exclusive.
+#[cfg(not(target_os = "windows"))]
+pub fn autostart_set(_enabled: bool) -> Result<(), String> {
+    Err("DigitalWellbeing only supports Windows".to_string())
 }
 
 #[tauri::command]

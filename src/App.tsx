@@ -64,7 +64,7 @@ const AppleAreaTooltip = ({ active, payload, showInHrs }: any) => {
 export default function App() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "analytics" | "settings">("dashboard");
   const [theme, setTheme] = useState<"dark" | "light">(() => {
-    const saved = localStorage.getItem("aura-theme");
+    const saved = localStorage.getItem("dw-theme");
     return (saved === "dark" || saved === "light") ? saved : "light";
   });
 
@@ -153,7 +153,7 @@ export default function App() {
   // Handle Theme
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("aura-theme", theme);
+    localStorage.setItem("dw-theme", theme);
   }, [theme]);
 
   // Check autostart status on mount
@@ -205,13 +205,13 @@ export default function App() {
     let filename = "";
     if (format === "json") {
       content = JSON.stringify(dataToExport, null, 2);
-      filename = `aura_report_${selectedDate}.json`;
+      filename = `dw_report_${selectedDate}.json`;
     } else {
       content = "Application,Executable,Category,Usage (Seconds)\n";
       topApps.forEach(app => {
         content += `"${app.display_name}","${app.executable_name}","${app.category}",${app.total_seconds}\n`;
       });
-      filename = `aura_report_${selectedDate}.csv`;
+      filename = `dw_report_${selectedDate}.csv`;
     }
 
     try {
@@ -295,7 +295,7 @@ export default function App() {
       <header className="sub-nav-frosted">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <Activity size={16} color="var(--colors-primary)" />
-          <span className="sub-nav-title">Aura</span>
+          <span className="sub-nav-title">DigitalWellbeing</span>
         </div>
         <div className="sub-nav-actions">
           <span className={`sub-nav-tab ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>Overview</span>
@@ -708,7 +708,7 @@ export default function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--colors-divider-soft)', paddingBottom: '20px' }}>
                   <div>
                     <h4 style={{ fontSize: '14px', fontWeight: 600 }}>Launch on Startup</h4>
-                    <p className="lead-subcopy" style={{ fontSize: '12px', marginTop: '2px', color: 'var(--colors-ink-muted-48)' }}>Automatically start Aura in the background when you log in.</p>
+                    <p className="lead-subcopy" style={{ fontSize: '12px', marginTop: '2px', color: 'var(--colors-ink-muted-48)' }}>Automatically start DigitalWellbeing Agent in the background when you log in.</p>
                   </div>
                   <div
                     className={`theme-toggle-track ${autostartEnabled ? 'active' : ''}`}
@@ -793,14 +793,26 @@ export default function App() {
                     <p className="lead-subcopy" style={{ fontSize: '12px', marginTop: '2px', color: 'var(--colors-ink-muted-48)' }}>Access the open-source code and official website details.</p>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="button-secondary-pill" onClick={() => openUrl("https://github.com/Harshshah6/AuraWellbeing")} style={{ padding: '6px 12px', fontSize: '11px' }}>GitHub URL</button>
+                    <button className="button-secondary-pill" onClick={() => openUrl("https://github.com/Harshshah6/digital-wellbeing")} style={{ padding: '6px 12px', fontSize: '11px' }}>GitHub URL</button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--colors-divider-soft)', paddingBottom: '20px' }}>
+                  <div>
+                    <h4 style={{ fontSize: '14px', fontWeight: 600 }}>Enterprise Agent</h4>
+                    <p className="lead-subcopy" style={{ fontSize: '12px', marginTop: '2px', color: 'var(--colors-ink-muted-48)' }}>
+                      This agent exposes a REST API on port <code style={{ fontFamily: 'monospace', color: 'var(--colors-primary)' }}>7842</code> and broadcasts its presence on UDP port <code style={{ fontFamily: 'monospace', color: 'var(--colors-primary)' }}>7843</code>. Open the Admin Dashboard on any machine in the same network to monitor all agents.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="button-secondary-pill" onClick={() => openUrl("http://localhost:7842/api/info")} style={{ padding: '6px 12px', fontSize: '11px' }}>API Info</button>
                   </div>
                 </div>
 
                 <div>
                   <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--colors-ink-muted-48)', textTransform: 'uppercase', marginBottom: '8px' }}>Specification</h4>
                   <p className="lead-subcopy" style={{ fontSize: '12.5px', color: 'var(--colors-ink-muted-80)' }}>
-                    Aura Wellbeing • <a target="_blank" href="https://github.com/Harshshah6/AuraWellbeing/releases/latest" style={{ color: 'var(--colors-ink-muted-80)' }}>Version {version}</a>
+                    DigitalWellbeing Enterprise Agent • <a target="_blank" href="https://github.com/Harshshah6/digital-wellbeing/releases/latest" style={{ color: 'var(--colors-ink-muted-80)' }}>Version {version}</a>
                   </p>
                 </div>
               </div>
