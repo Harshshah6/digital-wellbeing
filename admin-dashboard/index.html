@@ -414,6 +414,12 @@
       border: 1px solid rgba(248, 113, 113, 0.25);
     }
 
+    .badge-cached {
+      background: rgba(251, 191, 36, 0.12);
+      color: var(--amber);
+      border: 1px solid rgba(251, 191, 36, 0.25);
+    }
+
     .agent-stats {
       margin-top: 14px;
       padding-top: 12px;
@@ -797,6 +803,7 @@
       opacity: 1;
       transform: translateY(0);
     }
+
   </style>
 </head>
 
@@ -966,6 +973,27 @@
     let tlChart = null, catChart = null;
     let pollTimer = null, devTimer = null;
 
+    // ── Cache helpers ──────────────────────────────────────────────────────────
+    const CACHE_KEY = 'dw-admin-agents';
+
+    function persistAgents() {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(agents)); } catch (e) {}
+    }
+
+    function loadCachedAgents() {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (!raw) return false;
+        const cached = JSON.parse(raw);
+        if (typeof cached !== 'object' || !Object.keys(cached).length) return false;
+        // Mark all cached devices as stale/offline until re-verified
+        Object.keys(cached).forEach(ip => {
+          agents[ip] = { ...cached[ip], status: 'cached' };
+        });
+        return true;
+      } catch (e) { return false; }
+    }
+
     // ── Utils ──────────────────────────────────────────────────────────────────
     function fmt(s) {
       if (!s || s <= 0) return '0m';
@@ -1096,6 +1124,7 @@
 
     function register(info) {
       agents[info.ip] = { ...(agents[info.ip] || {}), ...info, status: 'online', lastSeen: Date.now() };
+      persistAgents();
       renderAgents();
     }
 
@@ -1118,9 +1147,14 @@
         grid.innerHTML = keys.map(ip => {
           const a = agents[ip];
           const sel = selected && selected.ip === ip;
-          const badge = a.status === 'online'
-            ? '<span class="badge badge-online">● Online</span>'
-            : '<span class="badge badge-offline">● Offline</span>';
+          let badge;
+          if (a.status === 'online') {
+            badge = '<span class="badge badge-online">● Online</span>';
+          } else if (a.status === 'cached') {
+            badge = '<span class="badge badge-cached">◌ Cached</span>';
+          } else {
+            badge = '<span class="badge badge-offline">● Offline</span>';
+          }
           const displayAddr = ip.includes(':') ? ip : `${ip}:${PORT}`;
           return `
       <div class="agent-card${sel ? ' selected' : ''}" onclick="selectAgent('${esc(ip)}')">
@@ -1307,6 +1341,7 @@
         const r = await probe(ip);
         agents[ip] = r ? { ...agents[ip], ...r, status: 'online', lastSeen: Date.now() } : { ...agents[ip], status: 'offline' };
       }));
+      persistAgents();
       const on = Object.values(agents).filter(a => a.status === 'online').length;
       setStatus('', `${on}/${Object.keys(agents).length} online`);
       renderAgents(); updateFleet();
@@ -1315,10 +1350,27 @@
 
     // ── Init ───────────────────────────────────────────────────────────────────
     document.getElementById('dateInput').value = today();
-    discover().then(() => {
-      setInterval(refreshAll, 8000);
-      if (Object.keys(agents).length) setStatus('', `${Object.keys(agents).length} agent(s) found`);
-    });
+
+    // Show cached devices immediately, then discover in background
+    const hasCached = loadCachedAgents();
+    if (hasCached) {
+      renderAgents();
+      updateFleet();
+      const cachedCount = Object.keys(agents).length;
+      setStatus('scanning', `Verifying ${cachedCount} cached device(s)…`);
+      toast(`📋 Restored ${cachedCount} device(s) from cache — scanning in background…`, 4000);
+      // Background: re-verify cached devices then sweep for new ones
+      (async () => {
+        await refreshAll();
+        await discover();
+        setInterval(refreshAll, 40000);
+      })();
+    } else {
+      discover().then(() => {
+        setInterval(refreshAll, 40000);
+        if (Object.keys(agents).length) setStatus('', `${Object.keys(agents).length} agent(s) found`);
+      });
+    }
   </script>
 </body>
 
