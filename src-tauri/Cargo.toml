@@ -43,3 +43,6 @@ windows-sys = { version = "0.52", features = [
     "Win32_UI_Input_KeyboardAndMouse"
 ] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.13", features = [] }
+

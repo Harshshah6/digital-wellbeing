@@ -31,6 +31,7 @@ pub struct ApiState {
     pub device_id: String,
     pub hostname: String,
     pub local_ip: String,
+    pub peers: Arc<Mutex<std::collections::HashMap<String, serde_json::Value>>>,
 }
 
 // ─── API Response types ───────────────────────────────────────────────────────
@@ -138,14 +139,23 @@ pub fn get_or_create_device_id_sync(pool: &SqlitePool) -> String {
 // ─── Route handlers ───────────────────────────────────────────────────────────
 
 async fn handle_info(State(state): State<ApiState>) -> Json<serde_json::Value> {
+    let subnet = state.local_ip.split('.').take(3).collect::<Vec<_>>().join(".");
     Json(serde_json::json!({
         "app": "DigitalWellbeing",
         "device_id": state.device_id,
         "hostname": state.hostname,
         "ip": state.local_ip,
+        "subnet": subnet,
         "port": HTTP_PORT,
         "version": env!("CARGO_PKG_VERSION"),
+        "os": std::env::consts::OS,
     }))
+}
+
+async fn handle_peers(State(state): State<ApiState>) -> Json<Vec<serde_json::Value>> {
+    let map = state.peers.lock().await;
+    let list: Vec<serde_json::Value> = map.values().cloned().collect();
+    Json(list)
 }
 
 async fn handle_top_apps(
@@ -369,11 +379,14 @@ pub fn start_enterprise_services(
         device_id, hostname, local_ip
     );
 
+    let peers_map = Arc::new(Mutex::new(std::collections::HashMap::<String, serde_json::Value>::new()));
+
     let api_state = ApiState {
         tracker: tracker_state,
         device_id: device_id.clone(),
         hostname: hostname.clone(),
         local_ip: local_ip.clone(),
+        peers: peers_map.clone(),
     };
 
     // ── HTTP REST server ──────────────────────────────────────────────────────
@@ -386,6 +399,7 @@ pub fn start_enterprise_services(
 
         let app = Router::new()
             .route("/api/info", get(handle_info))
+            .route("/api/peers", get(handle_peers))
             .route("/api/top_apps", get(handle_top_apps))
             .route("/api/categories", get(handle_categories))
             .route("/api/timeline", get(handle_timeline))
@@ -408,7 +422,7 @@ pub fn start_enterprise_services(
         }
     });
 
-    // ── UDP discovery beacon ──────────────────────────────────────────────────
+    // ── UDP discovery beacon broadcast ─────────────────────────────────────────
     let beacon = format!(
         r#"{{"app":"DigitalWellbeing","device_id":"{device_id}","hostname":"{hostname}","ip":"{local_ip}","port":{HTTP_PORT},"version":"{}"}}"#,
         env!("CARGO_PKG_VERSION")
@@ -426,6 +440,54 @@ pub fn start_enterprise_services(
                 }
             }
             Err(e) => eprintln!("[DigitalWellbeing] UDP beacon error: {}", e),
+        }
+    });
+
+    // ── UDP discovery beacon listener ──────────────────────────────────────────
+    let peers_clone = peers_map.clone();
+    let my_device_id = device_id.clone();
+    tauri::async_runtime::spawn(async move {
+        let std_socket = match std::net::UdpSocket::bind(format!("0.0.0.0:{}", UDP_BEACON_PORT)) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[DigitalWellbeing] UDP beacon listener bind error: {}", e);
+                return;
+            }
+        };
+        let _ = std_socket.set_nonblocking(true);
+        let socket = match tokio::net::UdpSocket::from_std(std_socket) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[DigitalWellbeing] UDP beacon listener socket error: {}", e);
+                return;
+            }
+        };
+
+        let mut buf = [0u8; 2048];
+        loop {
+            match socket.recv_from(&mut buf).await {
+                Ok((len, peer_addr)) => {
+                    if let Ok(mut val) = serde_json::from_slice::<serde_json::Value>(&buf[..len]) {
+                        if val.get("app").and_then(|v| v.as_str()) == Some("DigitalWellbeing") {
+                            let is_self = val.get("device_id").and_then(|v| v.as_str()) == Some(&my_device_id);
+                            if !is_self {
+                                let ip = val.get("ip").and_then(|v| v.as_str())
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|| peer_addr.ip().to_string());
+                                if let Some(obj) = val.as_object_mut() {
+                                    obj.insert("ip".to_string(), serde_json::Value::String(ip.clone()));
+                                }
+                                let mut map = peers_clone.lock().await;
+                                map.insert(ip, val);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[DigitalWellbeing] UDP beacon listener recv error: {}", e);
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                }
+            }
         }
     });
 }

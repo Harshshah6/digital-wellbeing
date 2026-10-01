@@ -481,10 +481,55 @@ pub fn autostart_set(enabled: bool) -> Result<(), String> {
 
 
 
-// Windows-only autostart. This app is Windows-exclusive.
-#[cfg(not(target_os = "windows"))]
+/// Linux autostart via XDG ~/.config/autostart/<name>.desktop
+#[cfg(target_os = "linux")]
+pub fn autostart_set(enabled: bool) -> Result<(), String> {
+    #[cfg(debug_assertions)]
+    const APP_NAME: &str = "digital-wellbeing-dev";
+    #[cfg(not(debug_assertions))]
+    const APP_NAME: &str = "digital-wellbeing";
+
+    let home = std::env::var("HOME").map_err(|_| "HOME env var not set".to_string())?;
+    let autostart_dir = std::path::PathBuf::from(&home)
+        .join(".config")
+        .join("autostart");
+
+    let desktop_path = autostart_dir.join(format!("{}.desktop", APP_NAME));
+
+    if enabled {
+        let exe = std::env::current_exe()
+            .map_err(|e| e.to_string())?
+            .to_string_lossy()
+            .to_string();
+
+        std::fs::create_dir_all(&autostart_dir).map_err(|e| e.to_string())?;
+
+        let desktop_content = format!(
+            "[Desktop Entry]\n\
+             Type=Application\n\
+             Name=Digital Wellbeing\n\
+             Exec=\"{}\" --background\n\
+             Hidden=false\n\
+             NoDisplay=false\n\
+             X-GNOME-Autostart-enabled=true\n\
+             Comment=Digital Wellbeing Employee Agent\n",
+            exe
+        );
+
+        std::fs::write(&desktop_path, desktop_content).map_err(|e| e.to_string())
+    } else {
+        if desktop_path.exists() {
+            std::fs::remove_file(&desktop_path).map_err(|e| e.to_string())
+        } else {
+            Ok(()) // Already absent, nothing to do
+        }
+    }
+}
+
+/// Unsupported platforms (macOS, etc.)
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 pub fn autostart_set(_enabled: bool) -> Result<(), String> {
-    Err("DigitalWellbeing only supports Windows".to_string())
+    Err("Autostart is not supported on this platform".to_string())
 }
 
 #[tauri::command]

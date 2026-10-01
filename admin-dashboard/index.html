@@ -972,6 +972,8 @@
     let selected = null;
     let tlChart = null, catChart = null;
     let pollTimer = null, devTimer = null;
+    let activeDeviceAbortCtrl = null;
+    let deviceDataCache = {};
 
     // ── Cache helpers ──────────────────────────────────────────────────────────
     const CACHE_KEY = 'dw-admin-agents';
@@ -1031,12 +1033,16 @@
     document.getElementById('themeBtn').textContent = saved === 'dark' ? '🌙' : '☀️';
 
     // ── Fetch ──────────────────────────────────────────────────────────────────
-    async function api(ip, path, params = {}) {
+    async function api(ip, path, params = {}, extSignal = null) {
       const qs = new URLSearchParams(params).toString();
       const addr = ip.includes(':') ? ip : `${ip}:${PORT}`;
       const url = `http://${addr}${path}${qs ? '?' + qs : ''}`;
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 4000);
+      if (extSignal) {
+        if (extSignal.aborted) { ctrl.abort(); }
+        else { extSignal.addEventListener('abort', () => ctrl.abort(), { once: true }); }
+      }
       try {
         const r = await fetch(url, { signal: ctrl.signal });
         clearTimeout(t);
@@ -1045,47 +1051,194 @@
       } catch (e) { clearTimeout(t); throw e; }
     }
 
-    async function probe(ip) {
+    async function probeFast(ip, timeoutMs = 1200) {
+      const addr = ip.includes(':') ? ip : `${ip}:${PORT}`;
+      const url = `http://${addr}/api/info`;
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
       try {
-        const info = await api(ip, '/api/info');
-        if (info && info.app === 'DigitalWellbeing') return { ip, ...info, status: 'online' };
+        const r = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!r.ok) return null;
+        const info = await r.json();
+        if (info && info.app === 'DigitalWellbeing') {
+          return { ip, ...info, status: 'online' };
+        }
         return null;
-      } catch { return null; }
+      } catch (_) {
+        clearTimeout(t);
+        return null;
+      }
+    }
+
+    async function probe(ip) {
+      return probeFast(ip, 1800);
+    }
+
+    // ── Subnet detection via WebRTC ICE candidates ─────────────────────────────
+    async function getLocalSubnets() {
+      const found = new Set();
+      try {
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        pc.createDataChannel('x');
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await new Promise(resolve => {
+          pc.onicecandidate = e => {
+            if (!e || !e.candidate) { resolve(); return; }
+            const cand = e.candidate.candidate;
+            const m = cand.match(/(\d+\.\d+\.\d+)\.\d+/);
+            if (m) {
+              const s = m[1];
+              if (!s.startsWith('127.') && !s.startsWith('169.254.')) {
+                found.add(s);
+              }
+            }
+          };
+          setTimeout(resolve, 1000);
+        });
+        pc.close();
+      } catch (_) {}
+      return [...found];
     }
 
     // ── Discovery ──────────────────────────────────────────────────────────────
-    async function scanSubnet(base) {
-      const ps = [];
-      for (let i = 1; i <= 254; i++) ps.push(probe(`${base}.${i}`));
-      const res = await Promise.allSettled(ps);
-      return res.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean);
+    async function scanSubnet(base, onFound) {
+      const BATCH_SIZE = 36;
+      const foundAgents = [];
+      const hosts = [];
+      for (let i = 1; i <= 254; i++) {
+        hosts.push(`${base}.${i}`);
+      }
+
+      for (let i = 0; i < hosts.length; i += BATCH_SIZE) {
+        const batch = hosts.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(batch.map(ip => probeFast(ip, 1200)));
+        for (const res of results) {
+          if (res.status === 'fulfilled' && res.value) {
+            foundAgents.push(res.value);
+            if (onFound) onFound(res.value);
+          }
+        }
+      }
+      return foundAgents;
     }
 
     async function discover() {
-      setStatus('scanning', 'Scanning LAN…');
-      toast('🔍 Scanning your network for agents…');
-      let found = 0;
-      // Probe loopback targets (standard agent on 7842 + local mock devices on 7851-7854)
-      const localTargets = ['127.0.0.1', '127.0.0.1:7851', '127.0.0.1:7852', '127.0.0.1:7853', '127.0.0.1:7854'];
+      setStatus('scanning', 'Scanning network…');
+      toast('🔍 Scanning for DigitalWellbeing devices…');
+      let foundTotal = 0;
+
+      const onAgentDiscovered = (agent) => {
+        if (!agent || !agent.ip) return;
+        const isNew = !agents[agent.ip];
+        register(agent);
+        if (isNew) {
+          foundTotal++;
+          setStatus('scanning', `Found ${foundTotal} device(s)…`);
+        }
+      };
+
+      // 1. Probe local loopback targets (app on 7842 + local mock devices)
+      const localTargets = ['127.0.0.1', 'localhost', '127.0.0.1:7851', '127.0.0.1:7852', '127.0.0.1:7853', '127.0.0.1:7854'];
+      let localAgent = null;
       for (const target of localTargets) {
         try {
-          const local = await probe(target);
-          if (local && !agents[local.ip]) { register(local); found++; }
-        } catch (e) { }
+          const r = await probeFast(target, 800);
+          if (r) {
+            onAgentDiscovered(r);
+            if (!localAgent) localAgent = r;
+          }
+        } catch (_) {}
       }
 
-      const subnets = ['192.168.1', '192.168.0', '10.0.0', '10.0.1', '172.16.0'];
-      for (const s of subnets) {
-        const rs = await scanSubnet(s);
-        rs.forEach(r => { if (r && !agents[r.ip]) { register(r); found++; } });
-        if (found > 0) break;
+      // 2. Query peers from local agent (discovered automatically via UDP beacon)
+      if (localAgent) {
+        try {
+          const peers = await api(localAgent.ip, '/api/peers');
+          if (Array.isArray(peers) && peers.length) {
+            for (const p of peers) {
+              if (p && p.ip) {
+                const verified = await probeFast(p.ip, 1200);
+                if (verified) onAgentDiscovered(verified);
+              }
+            }
+          }
+        } catch (_) {}
       }
-      if (!Object.keys(agents).length) {
+
+      // 3. Gather candidate subnets dynamically
+      const candidateSubnets = new Set();
+
+      // From local agent
+      if (localAgent) {
+        if (localAgent.subnet) candidateSubnets.add(localAgent.subnet);
+        if (localAgent.ip && !localAgent.ip.startsWith('127.')) {
+          candidateSubnets.add(localAgent.ip.split('.').slice(0, 3).join('.'));
+        }
+      }
+
+      // From window location if served via LAN HTTP
+      const locHost = window.location.hostname;
+      if (locHost && locHost !== 'localhost' && locHost !== '127.0.0.1') {
+        const parts = locHost.split('.');
+        if (parts.length === 4) candidateSubnets.add(parts.slice(0, 3).join('.'));
+      }
+
+      // From any cached or previously added agents
+      Object.keys(agents).forEach(ip => {
+        const cleanIp = ip.split(':')[0];
+        const parts = cleanIp.split('.');
+        if (parts.length === 4 && !parts[0].startsWith('127.')) {
+          candidateSubnets.add(parts.slice(0, 3).join('.'));
+        }
+      });
+
+      // From WebRTC candidates
+      try {
+        const webrtcSubs = await getLocalSubnets();
+        webrtcSubs.forEach(s => candidateSubnets.add(s));
+      } catch (_) {}
+
+      // Common fallback LAN subnets
+      const fallbackSubnets = [
+        '192.168.88', '192.168.1', '192.168.0', '192.168.2', '192.168.10',
+        '192.168.29', '192.168.31', '192.168.100', '192.168.178',
+        '10.0.0', '10.0.1', '172.16.0', '172.20.10'
+      ];
+
+      // Detected primary subnets take top priority
+      const primarySubnets = [...candidateSubnets].filter(s => s && s.split('.').length === 3);
+
+      // Build ordered scan list
+      const subnetsToScan = [...primarySubnets];
+      fallbackSubnets.forEach(s => {
+        if (!subnetsToScan.includes(s)) subnetsToScan.push(s);
+      });
+
+      // Scan primary detected subnets completely
+      for (const s of primarySubnets) {
+        setStatus('scanning', `Scanning ${s}.x LAN…`);
+        await scanSubnet(s, onAgentDiscovered);
+      }
+
+      // If no devices found yet, scan top fallback subnets
+      if (foundTotal === 0 || !primarySubnets.length) {
+        const fallbacksToTry = subnetsToScan.filter(s => !primarySubnets.includes(s)).slice(0, 3);
+        for (const s of fallbacksToTry) {
+          setStatus('scanning', `Scanning ${s}.x LAN…`);
+          await scanSubnet(s, onAgentDiscovered);
+          if (foundTotal > 0) break;
+        }
+      }
+
+      const totalAgents = Object.keys(agents).length;
+      if (!totalAgents) {
         setStatus('error', 'No agents found — add manually');
-        toast('⚠️ No agents found. Enter an IP above.');
+        toast('⚠️ No agents found. Enter device IP above.');
       } else {
-        setStatus('', `${Object.keys(agents).length} agent(s) found`);
-        toast(`✅ Found ${Object.keys(agents).length} DigitalWellbeing agent(s)!`);
+        setStatus('', `${totalAgents} agent(s) found`);
+        toast(`✅ Found ${totalAgents} DigitalWellbeing device(s)!`);
       }
       updateFleet();
     }
@@ -1185,59 +1338,173 @@
       }
     }
 
+    // ── Apply & Reset Device Data ─────────────────────────────────────────────
+    function applyDeviceData(data) {
+      if (!data) return;
+      const { apps, cats, tl, avg, hm, total } = data;
+      document.getElementById('kpiST').textContent = fmt(total || 0);
+      document.getElementById('kpiApps').textContent = (apps && apps.length) || 0;
+      document.getElementById('kpiDAvg').textContent = avg && avg.daily_avg_seconds ? fmt(avg.daily_avg_seconds) : '—';
+      document.getElementById('kpiWAvg').textContent = avg && avg.weekly_avg_seconds ? fmt(avg.weekly_avg_seconds) : '—';
+      drawTimeline(tl || []);
+      drawCategories(cats || []);
+      drawApps(apps || [], total || 0);
+      drawHeatmap(hm || []);
+    }
+
+    function resetDetailPanelForLoading(device) {
+      document.getElementById('kpiST').textContent = device.screenTime != null ? fmt(device.screenTime) : '—';
+      document.getElementById('kpiApps').textContent = device.appCount != null ? device.appCount : '—';
+      document.getElementById('kpiDAvg').textContent = '—';
+      document.getElementById('kpiWAvg').textContent = '—';
+
+      if (tlChart) { tlChart.destroy(); tlChart = null; }
+      if (catChart) { catChart.destroy(); catChart = null; }
+
+      const tlCanvas = document.getElementById('tlChart');
+      if (tlCanvas) {
+        const ctx = tlCanvas.getContext('2d');
+        ctx.clearRect(0, 0, tlCanvas.width, tlCanvas.height);
+      }
+      const catCanvas = document.getElementById('catChart');
+      if (catCanvas) {
+        const ctx = catCanvas.getContext('2d');
+        ctx.clearRect(0, 0, catCanvas.width, catCanvas.height);
+      }
+
+      document.getElementById('appList').innerHTML = `
+        <div style="text-align:center;padding:36px 20px;color:var(--text-faint);">
+          <div class="scan-ring" style="width:28px;height:28px;margin:0 auto 10px;"></div>
+          <div>Loading applications for ${esc(device.hostname || device.ip)}…</div>
+        </div>
+      `;
+
+      document.getElementById('hmGrid').innerHTML = `
+        <div style="text-align:center;padding:24px;color:var(--text-faint);font-size:12px;">Loading activity history…</div>
+      `;
+    }
+
     // ── Select device ──────────────────────────────────────────────────────────
     async function selectAgent(ip) {
+      if (selected && selected.ip === ip) return;
+
+      // 1. Immediately abort any in-flight request from previously selected device
+      if (activeDeviceAbortCtrl) {
+        activeDeviceAbortCtrl.abort();
+        activeDeviceAbortCtrl = null;
+      }
+      clearInterval(devTimer);
+      devTimer = null;
+
+      // 2. Switch selected pointer & highlight card
       selected = agents[ip];
       renderAgents();
-      document.getElementById('dateInput').value = today();
+
+      const date = document.getElementById('dateInput').value || today();
+      document.getElementById('dateInput').value = date;
       document.getElementById('dName').textContent = selected.hostname || selected.ip;
       const displayAddr = selected.ip.includes(':') ? selected.ip : `${selected.ip}:${PORT}`;
-      document.getElementById('dMeta').textContent = `${displayAddr} · v${selected.version || '?'} · ${selected.user ? selected.user + ' · ' : ''}Windows`;
+      const osName = selected.os ? (selected.os.charAt(0).toUpperCase() + selected.os.slice(1)) : (navigator.platform.includes('Linux') ? 'Linux' : 'Windows');
+      document.getElementById('dMeta').textContent = `${displayAddr} · v${selected.version || '?'} · ${selected.user ? selected.user + ' · ' : ''}${osName}`;
       document.getElementById('dId').textContent = `Device ID: ${selected.device_id || '—'}`;
       document.getElementById('detailPanel').classList.add('visible');
-      await loadDevice();
-      clearInterval(devTimer);
-      devTimer = setInterval(loadDevice, 10000);
+
+      // 3. Check memory cache for instant switch
+      const cacheKey = `${ip}_${date}`;
+      const cached = deviceDataCache[cacheKey];
+
+      if (cached) {
+        // INSTANT switch: render cached data in 0ms!
+        applyDeviceData(cached);
+        // Silent background refresh to keep data live
+        loadDevice(true);
+      } else {
+        // Instant clear: purge previous device's data so it NEVER lingers
+        resetDetailPanelForLoading(selected);
+        await loadDevice(false);
+      }
+
+      // 4. Start periodic refresh
+      devTimer = setInterval(() => loadDevice(true), 10000);
     }
 
     function closeDetail() {
-      selected = null; clearInterval(devTimer);
+      if (activeDeviceAbortCtrl) {
+        activeDeviceAbortCtrl.abort();
+        activeDeviceAbortCtrl = null;
+      }
+      selected = null;
+      clearInterval(devTimer);
+      devTimer = null;
       document.getElementById('detailPanel').classList.remove('visible');
       renderAgents();
     }
 
-    async function loadDevice() {
+    async function loadDevice(silent = false) {
       if (!selected) return;
       const date = document.getElementById('dateInput').value || today();
       const ip = selected.ip;
+      const cacheKey = `${ip}_${date}`;
+
+      if (activeDeviceAbortCtrl) {
+        activeDeviceAbortCtrl.abort();
+      }
+      activeDeviceAbortCtrl = new AbortController();
+      const signal = activeDeviceAbortCtrl.signal;
+
       try {
         const [apps, cats, tl, avg, hm] = await Promise.all([
-          api(ip, '/api/top_apps', { date, limit: 10 }),
-          api(ip, '/api/categories', { date }),
-          api(ip, '/api/timeline', { date }),
-          api(ip, '/api/avg_stats'),
-          api(ip, '/api/heatmap'),
+          api(ip, '/api/top_apps', { date, limit: 10 }, signal),
+          api(ip, '/api/categories', { date }, signal),
+          api(ip, '/api/timeline', { date }, signal),
+          api(ip, '/api/avg_stats', {}, signal),
+          api(ip, '/api/heatmap', {}, signal),
         ]);
-        const total = apps.reduce((s, a) => s + a.total_seconds, 0);
-        document.getElementById('kpiST').textContent = fmt(total);
-        document.getElementById('kpiApps').textContent = apps.length;
-        document.getElementById('kpiDAvg').textContent = fmt(avg.daily_avg_seconds);
-        document.getElementById('kpiWAvg').textContent = fmt(avg.weekly_avg_seconds);
-        drawTimeline(tl);
-        drawCategories(cats);
-        drawApps(apps, total);
-        drawHeatmap(hm);
-        agents[ip].screenTime = total;
-        agents[ip].appCount = apps.length;
-        renderAgents(); updateFleet();
-      } catch (e) {
-        console.warn('Load device failed', e);
-        if (agents[ip]) agents[ip].status = 'offline';
+
+        // Guard: if user switched to another device during fetch, discard results completely
+        if (!selected || selected.ip !== ip) return;
+
+        const total = (apps || []).reduce((s, a) => s + a.total_seconds, 0);
+        const data = { apps, cats, tl, avg, hm, total, timestamp: Date.now() };
+
+        deviceDataCache[cacheKey] = data;
+        applyDeviceData(data);
+
+        if (agents[ip]) {
+          agents[ip].screenTime = total;
+          agents[ip].appCount = (apps || []).length;
+          agents[ip].status = 'online';
+        }
+        persistAgents();
         renderAgents();
+        updateFleet();
+      } catch (e) {
+        if (e.name === 'AbortError' || (selected && selected.ip !== ip)) {
+          return;
+        }
+        console.warn('Load device failed', e);
+        if (!silent && selected && selected.ip === ip) {
+          toast(`⚠️ Unable to reach device at ${ip}`);
+          if (agents[ip]) agents[ip].status = 'offline';
+          renderAgents();
+        }
       }
     }
 
-    function goToday() { document.getElementById('dateInput').value = today(); loadDevice(); }
+    function goToday() {
+      document.getElementById('dateInput').value = today();
+      if (selected) {
+        const cacheKey = `${selected.ip}_${today()}`;
+        const cached = deviceDataCache[cacheKey];
+        if (cached) {
+          applyDeviceData(cached);
+          loadDevice(true);
+        } else {
+          resetDetailPanelForLoading(selected);
+          loadDevice(false);
+        }
+      }
+    }
 
     // ── Charts ─────────────────────────────────────────────────────────────────
     function gc() {
@@ -1337,15 +1604,28 @@
     async function refreshAll() {
       if (!Object.keys(agents).length) { discover(); return; }
       setStatus('scanning', 'Refreshing…');
+      // Also query local peers if available
+      try {
+        const peers = await api('127.0.0.1', '/api/peers');
+        if (Array.isArray(peers)) {
+          for (const p of peers) {
+            if (p && p.ip && !agents[p.ip]) {
+              const verified = await probeFast(p.ip, 1200);
+              if (verified) register(verified);
+            }
+          }
+        }
+      } catch (_) {}
+
       await Promise.all(Object.keys(agents).map(async ip => {
-        const r = await probe(ip);
+        const r = await probeFast(ip, 1500);
         agents[ip] = r ? { ...agents[ip], ...r, status: 'online', lastSeen: Date.now() } : { ...agents[ip], status: 'offline' };
       }));
       persistAgents();
       const on = Object.values(agents).filter(a => a.status === 'online').length;
       setStatus('', `${on}/${Object.keys(agents).length} online`);
       renderAgents(); updateFleet();
-      if (selected) loadDevice();
+      if (selected) loadDevice(true);
     }
 
     // ── Init ───────────────────────────────────────────────────────────────────

@@ -104,10 +104,9 @@ body {
 /* Sub-Navigation Pinned Frosted Bar (`sub-nav-frosted`) — Now top-level */
 .sub-nav-frosted {
   height: 52px;
-  background: color-mix(in srgb, var(--colors-canvas) 80%, transparent);
+  /* backdrop-filter is CPU-rendered on WebKit2GTK/Wayland — replaced with solid tint */
+  background: color-mix(in srgb, var(--colors-canvas) 96%, transparent);
   border-bottom: 1px solid var(--colors-hairline);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -115,6 +114,9 @@ body {
   z-index: 90;
   position: sticky;
   top: 0;
+  /* GPU layer — prevents scroll repaint bleeding */
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .sub-nav-title {
@@ -156,6 +158,10 @@ body {
   flex: 1;
   overflow-y: auto;
   background: var(--colors-canvas-parchment);
+  /* Force GPU compositing layer — eliminates WebKit2GTK scroll jank on Linux */
+  will-change: scroll-position;
+  transform: translateZ(0);
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Full-bleed alternating layout tiles */
